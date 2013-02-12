@@ -47,11 +47,13 @@ angular.module( 'ui.bootstrap.tooltip', [] )
       
       // Calculate the current position and size of the directive element.
       function getPosition() {
+
+        var getBoundingClientRect = element[0].getBoundingClientRect();
         return {
           width: element.prop( 'offsetWidth' ),
           height: element.prop( 'offsetHeight' ),
-          top: element.prop( 'offsetTop' ),
-          left: element.prop( 'offsetLeft' )
+          top: getBoundingClientRect.top || element.prop( 'offsetTop' ),
+          left: getBoundingClientRect.left || element.prop( 'offsetLeft' )
         };
       }
       
