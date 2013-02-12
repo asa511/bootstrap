@@ -14,17 +14,18 @@ dialogModule.controller('MessageBoxController', ['$scope', 'dialog', 'model', fu
 dialogModule.provider("$dialog", function(){
 
   // The default options for all dialogs.
-	var defaults = {
-		backdrop: true,
-		modalClass: 'modal',
-		backdropClass: 'modal-backdrop',
+  var defaults = {
+    backdrop: true,
+    modalClass: 'modal',
+    backdropClass: 'modal-backdrop',
     transitionClass: 'fade',
     triggerClass: 'in',
-		resolve:{},
-		backdropFade: false,
-		modalFade:false,
-		keyboard: true, // close with esc key
-		backdropClick: true // only in conjunction with backdrop=true
+    modalOpenClass: 'modal-open',
+    resolve:{},
+    backdropFade: false,
+    modalFade:false,
+    keyboard: true, // close with esc key
+    backdropClick: true // only in conjunction with backdrop=true
     /* other options: template, templateUrl, controller */
 	};
 
@@ -113,7 +114,7 @@ dialogModule.provider("$dialog", function(){
       }
 
       this._loadResolves().then(function(locals) {
-        var $scope = locals.$scope = self.$scope = $rootScope.$new();
+        var $scope = locals.$scope = self.$scope = locals.$scope ? locals.$scope : $rootScope.$new();
 
         self.modalEl.html(locals.$template);
 
@@ -124,6 +125,7 @@ dialogModule.provider("$dialog", function(){
 
         $compile(self.modalEl)($scope);
         self._addElementsToDom();
+        body.addClass(self.options.modalOpenClass);
 
         // trigger tranisitions
         setTimeout(function(){
@@ -143,6 +145,7 @@ dialogModule.provider("$dialog", function(){
       var self = this;
       var fadingElements = this._getFadingElements();
 
+      body.removeClass(self.options.modalOpenClass);
       if(fadingElements.length > 0){
         for (var i = fadingElements.length - 1; i >= 0; i--) {
           $transition(fadingElements[i], removeTriggerClass).then(onCloseComplete);
@@ -261,4 +264,60 @@ dialogModule.provider("$dialog", function(){
       }
     };
   }];
-});
+})
+.directive('modal', ['$parse', '$dialog', function($parse, $dialog) {
+  var backdropEl;
+  var body = angular.element(document.getElementsByTagName('body')[0]);
+  return {
+    restrict: 'EA',
+    link: function(scope, elm, attrs) {
+      var opts = angular.extend({}, scope.$eval(attrs.uiOptions || attrs.bsOptions || attrs.options));
+      var shownExpr = attrs.modal || attrs.show;
+      var setClosed;
+
+      // Create a basic dialog with the template as the contents of the directive
+      // Add the current scope as the resolve in order to make the directive scope as a dialog controller scope
+      opts = angular.extend(opts, {template: elm.html(), resolve: 
+        {
+          $scope: function() { return scope; } 
+        }});
+      var dialog = $dialog.dialog(opts);
+
+      /** 
+       * Hide directive contents as we will be using a service based modal
+       * This is not really good and seems smelly...but a complete refactoring required to
+       * make dialog service work with "already in dom" templates that should not be removed from there
+       */ 
+      elm.css({'display':'none'});
+
+      // Basically init the dialog because the close method is called when angular bindings for directive are resolved
+      dialog.open();
+
+      if (attrs.close) {
+        setClosed = function() {
+          scope.$apply(attrs.close);
+        };
+      } else {
+        setClosed = function() {
+          scope.$apply(function() {
+            $parse(shownExpr).assign(scope, false);
+          });
+        };
+      }
+      
+      function setShown(shown) {
+        scope.$apply(function() {
+          model.assign(scope, shown);
+        });
+      }
+
+      scope.$watch(shownExpr, function(isShown, oldShown) {
+        if (isShown) {
+          dialog.open().then(function(){ $parse(shownExpr).assign(scope, false); });
+        } else {
+          dialog.close();
+        }
+      });
+    }
+  };
+}]);
