@@ -11,6 +11,8 @@ dialogModule.controller('MessageBoxController', ['$scope', 'dialog', 'model', fu
   };
 }]);
 
+dialogModule.value('activeBackdrops', 0);
+
 dialogModule.provider("$dialog", function(){
 
   // The default options for all dialogs.
@@ -29,7 +31,10 @@ dialogModule.provider("$dialog", function(){
     /* other options: template, templateUrl, controller */
 	};
 
+
 	var globalOptions = {};
+
+  var activeBackdrops = {value : 0};
 
   // The `options({})` allows global configuration of all dialogs in the application.
   //
@@ -44,7 +49,6 @@ dialogModule.provider("$dialog", function(){
   // Returns the actual `$dialog` service that is injected in controllers
 	this.$get = ["$http", "$document", "$compile", "$rootScope", "$controller", "$templateCache", "$q", "$transition", "$injector",
   function ($http, $document, $compile, $rootScope, $controller, $templateCache, $q, $transition, $injector) {
-
 		var body = $document.find('body');
 
 		function createElement(clazz) {
@@ -143,26 +147,27 @@ dialogModule.provider("$dialog", function(){
     // closes the dialog and resolves the promise returned by the `open` method with the specified result.
     Dialog.prototype.close = function(result){
       var self = this;
-      var fadingElements = this._getFadingElements();
+      if(self._open) {
 
-      body.removeClass(self.options.modalOpenClass);
-      if(fadingElements.length > 0){
-        for (var i = fadingElements.length - 1; i >= 0; i--) {
-          $transition(fadingElements[i], removeTriggerClass).then(onCloseComplete);
+        var fadingElements = this._getFadingElements();
+
+        body.removeClass(self.options.modalOpenClass);
+        if(fadingElements.length > 0){
+          for (var i = fadingElements.length - 1; i >= 0; i--) {
+            $transition(fadingElements[i], removeTriggerClass).then(onCloseComplete);
+          }
+          return;
         }
-        return;
-      }
 
-      this._onCloseComplete(result);
+        this._onCloseComplete(result);
+      }
 
       function removeTriggerClass(el){
         el.removeClass(self.options.triggerClass);
       }
 
       function onCloseComplete(){
-        if(self._open){
           self._onCloseComplete(result);
-        }
       }
     };
 
@@ -197,13 +202,24 @@ dialogModule.provider("$dialog", function(){
 
     Dialog.prototype._addElementsToDom = function(){
       body.append(this.modalEl);
-      if(this.options.backdrop) { body.append(this.backdropEl); }
+      if(this.options.backdrop) { 
+        if (activeBackdrops.value === 0) {
+          body.append(this.backdropEl); 
+        }
+        activeBackdrops.value++;
+      }
+
       this._open = true;
     };
 
     Dialog.prototype._removeElementsFromDom = function(){
       this.modalEl.remove();
-      if(this.options.backdrop) { this.backdropEl.remove(); }
+      if(this.options.backdrop) { 
+        activeBackdrops.value--;
+        if (activeBackdrops.value === 0) {
+          this.backdropEl.remove(); 
+        }
+      }
       this._open = false;
     };
 
@@ -280,7 +296,8 @@ dialogModule.provider("$dialog", function(){
       opts = angular.extend(opts, {template: elm.html(), resolve: 
         {
           $scope: function() { return scope; } 
-        }});
+        }
+      });
       var dialog = $dialog.dialog(opts);
 
       /** 
@@ -298,10 +315,10 @@ dialogModule.provider("$dialog", function(){
           scope.$apply(attrs.close);
         };
       } else {
-        setClosed = function() {
-          scope.$apply(function() {
-            $parse(shownExpr).assign(scope, false);
-          });
+        setClosed = function() {         
+          if (angular.isFunction($parse(shownExpr).assign)) {
+            $parse(shownExpr).assign(scope, false); 
+          }
         };
       }
       
@@ -313,7 +330,9 @@ dialogModule.provider("$dialog", function(){
 
       scope.$watch(shownExpr, function(isShown, oldShown) {
         if (isShown) {
-          dialog.open().then(function(){ $parse(shownExpr).assign(scope, false); });
+          dialog.open().then(function(){
+            setClosed();
+          });
         } else {
           dialog.close();
         }

@@ -42,7 +42,7 @@ describe('Given ui.bootstrap.dialog', function(){
 
 	var openDialog = function(templateUrl, controller){
 		dialog.open(templateUrl, controller);
-		$rootScope.$apply();
+		$scope.$apply();
 	};
 
 	var closeDialog = function(result){
@@ -286,5 +286,126 @@ describe('Given ui.bootstrap.dialog', function(){
 		it('should use the specified template', function(){
 			expect($document.find('body > div.modal > div.modal-header').length).toBe(1);
 		});
+	});
+
+	describe('Modal directive', function() {
+		var elm;
+
+		var templateGenerator = function(expr, scopeExpressionContent) {
+			var additionalExpression = scopeExpressionContent ? scopeExpressionContent : '';
+			return '<div modal="' + expr + '" options="modalOpts">' +
+						additionalExpression + 'Hello!</div>';
+		};
+
+		it('should have just one backdrop', function() {
+			var numberOfSimultaneousModals = 5;
+			for (var i = 0; i< 5; i++) {
+				$compile(templateGenerator('modalShown' + i))($scope);
+				$scope.$apply('modalShown' + i + ' = true');
+			}	
+			expect($document.find('body > div.modal-backdrop').length).toBe(1);
+			expect($document.find('body > div.modal').length).toBe(numberOfSimultaneousModals);
+
+			for (i = 0; i< 5; i++) {
+				$scope.$apply('modalShown' + i + ' = false');
+			}	
+		});
+
+		it('should work with expression instead of a variable', function() {			
+			$scope.foo = true;
+			$scope.shown = function() { return $scope.foo; };
+			elm = $compile(templateGenerator('shown()'))($scope);
+			$scope.$apply();
+			expect($document.find('body > div.modal').css('display')).toBe('block');
+			$scope.$apply('foo = false');
+			expect($document.find('body > div.modal').length).toBe(0);
+		});
+/*
+		it('should work with a close expression and escape close', function() {
+			scope.bar = true;
+			scope.show = function() { return scope.bar; };
+			var elm = $compile("<div modal='show()' close='bar=false'></div>")(scope);
+			scope.$apply();
+			expect(elm).toHaveClass('in');
+			$("body").trigger({type :'keyup', which: 27}); //escape
+			expect(elm).not.toHaveClass('in');
+		});
+
+		it('should work with a close expression and backdrop close', function() {
+			scope.baz = 1;
+			scope.hello = function() { return scope.baz===1; };
+			var elm = $compile("<div modal='hello()' close='baz=0'></div>")(scope);
+			scope.$apply();
+			expect(elm).toHaveClass("in");
+			$(".modal-backdrop").click();
+			expect(elm).not.toHaveClass('in');
+		});
+*/
+		describe('dialog generated should have directives scope', function() {
+			var clickSpy;
+
+			beforeEach(function(){
+				clickSpy = jasmine.createSpy('localScopeFunction');
+				$scope.myFunc = clickSpy;
+			});
+
+			afterEach(function() {
+				$scope.$apply('modalShown = false');			
+			});
+
+			it('should call scope methods', function() {
+				elm = $compile(templateGenerator('modalShown', '<button ng-click="myFunc()">Click</button>'))($scope);
+				$scope.$apply('modalShown = true');
+				$document.find('body > div.modal button')[0].click();
+				expect(clickSpy).toHaveBeenCalled();
+			});
+
+			it('should resolve scope vars', function() {
+				$scope.buttonName = 'my button';
+				elm = $compile(templateGenerator('modalShown', '<button>{{buttonName}}</button>'))($scope);
+				$scope.$apply('modalShown = true');
+				expect($document.find('body > div.modal button').text()).toBe('my button');
+			});
+
+		});
+
+		describe('toogle modal dialog on model change', function() {
+
+			beforeEach(function(){
+				elm = $compile(templateGenerator('modalShown'))($scope);
+				$scope.$apply('modalShown = true');
+			});
+
+			afterEach(function() {
+				$scope.$apply('modalShown = false');			
+			});
+
+			it('the backdrop should be displayed if specified (true by default)', function(){
+				expect($document.find('body > div.modal-backdrop').css('display')).toBe('block');
+			});
+
+			it('the modal should be displayed', function(){
+				expect($document.find('body > div.modal').css('display')).toBe('block');
+			});
+
+			it('the modal should not be displayed', function(){
+				$scope.$apply('modalShown = false');
+				expect($document.find('body > div.modal').length).toBe(0);
+			});
+
+			it('should update the model if the backdrop is clicked', function() {
+				$document.find('body > div.modal-backdrop').click();
+				$scope.$digest();
+				expect($scope.modalShown).not.toBeTruthy();
+			});
+
+			it('should update the model if the esc is pressed', function() {
+				var e = $.Event('keydown');
+				e.which = 27;
+				$document.find('body').trigger(e);
+				$scope.$digest();
+				expect($scope.modalShown).not.toBeTruthy();
+			});
+		});		
 	});
 });
